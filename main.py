@@ -2,12 +2,16 @@ import os
 import asyncio
 import json
 from starlette.applications import Starlette
+from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket
-from starlette.responses import PlainTextResponse
+from starlette.responses import PlainTextResponse, JSONResponse
 import sys
 
-# Получаем порт от Render (или используем 8000 для локального теста)
+# Получаем порт от Render
 PORT = int(os.environ.get('PORT', 8000))
+
+async def homepage(request):
+    return PlainTextResponse("Proxy Server is running. Use /vpn for WebSocket connection.")
 
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -18,7 +22,6 @@ async def websocket_endpoint(websocket: WebSocket):
     
     try:
         # 1. Ждем первое сообщение с настройками подключения
-        # Ожидаем формат: {"host": "example.com", "port": 443}
         data = await websocket.receive_text()
         config = json.loads(data)
         
@@ -35,7 +38,6 @@ async def websocket_endpoint(websocket: WebSocket):
         async def relay_ws_to_target():
             try:
                 while True:
-                    # Получаем бинарные данные от клиента
                     data = await websocket.receive_bytes()
                     if not data:
                         break
@@ -73,14 +75,10 @@ async def websocket_endpoint(websocket: WebSocket):
             pass
         print("WebSocket closed", file=sys.stderr)
 
-# Создаем приложение
+# Создаем приложение с правильными маршрутами
 app = Starlette(
     routes=[
-        ('/vpn', websocket_endpoint),
+        Route('/', homepage),
+        WebSocketRoute('/vpn', websocket_endpoint),
     ]
 )
-
-# Для локального запуска можно раскомментировать, но на Render мы будем использовать uvicorn через командную строку
-# if __name__ == '__main__':
-#     import uvicorn
-#     uvicorn.run(app, host="0.0.0.0", port=PORT)
